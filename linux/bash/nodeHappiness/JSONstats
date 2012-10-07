@@ -1,0 +1,102 @@
+#!/bin/bash
+#
+# jsonStats.sh
+#
+# (c) 2011 Sam Caldwell.  Public Domain
+#
+#	This file will be run as a service to create
+#	a JSON store of current system statistics 
+#   located at $CURRENT_STORE
+#
+#	It will also create a store of certain
+#	historical data located at $ARCHIVE_STORE
+#
+STORE_ROOT=/var/log
+CURRENT_STORE=$STORE_ROOT/$0.log
+ARCHIVE_STORE_DIR=$STORE_ROOT/$0.d
+ARCHIVE_STORE=$ARCHIVE_STORE_DIR/$0.log.$(date | tr -d ' ' '-')
+### DO NOT DO ANYTHING OTHER THAN POLL HARDWARE HERE BETWEEN TIMESTARTED AND TIMECOMPLETED ###
+TIMESTARTED=$(date | tr -s ' ' '-')
+NET_RAW_DATA=$(ifconfig)
+DISK_RAW_DATA=$(iostat -dk | tail -n+4 | tr -d '\n')
+LOADAVG=$(cat /proc/loadavg)
+MEMINFO=$(cat /proc/meminfo)
+CPUINFO=$(cat /proc/cpuinfo)
+TIMECOMPLETED=$(date | tr -s ' ' '-')
+### DO NOT DO ANYTHING OTHER THAN POLL HARDWARE HERE BETWEEN TIMESTARTED AND TIMECOMPLETED ###
+CPU_CORE_COUNT=$(cat /proc/cpuinfo | grep bogomips | wc -l)
+NET_INTERFACES=$(ifconfig | egrep Link\ encap | awk '{print $1}')
+NET_DEV_COUNT=$(echo $NET_INTERFACES | wc -l)
+JSON_NETIO=""
+for IFACE in $NET_INTERFACES; do	
+	JSON_NETIO=$JSON_NETIO"{
+			device:'$IFACE',
+			hwaddr:"$(ifconfig $IFACE 		 	| grep -v lo | egrep -o HWaddr\ \([0-9a-fA-F]\{2\}\:*\){6} | awk '{print $2}')"',
+			mtu:"$(ifconfig $IFACE 			 	| grep -v lo |  egrep -o MTU\:[0-9]+ | tr -s ':' ' ' | awk '{print $2}')"',
+			metric:"$(ifconfig $IFACE 		 	| grep -v lo |  egrep -o Metric\:[0-9]+ | tr -s ':' ' ' | awk '{print $2}')"',
+			encapsulation:"$(ifconfig $IFACE 	| grep -v lo |  grep Link\ encap\: | sed -e 's/wlan0[\ ]*Link\ encap\://' | awk '{print $1}')"',
+			rxpacket:"$(ifconfig $IFACE  	 	| grep -v lo |  egrep -o RX[a-zA-Z0-9\ ]*packets\:[0-9]+  | tr -s ':' ' ' | awk '{print $3}')"',
+			rxerrors:"$(ifconfig $IFACE   	 	| grep -v lo |  grep RX | egrep -o errors\:[0-9]*		| tr -s ':' ' ' 	| awk '{print $2}')"',
+			rxdropped:"$(ifconfig $IFACE  	 	| grep -v lo |  grep RX | egrep -o dropped\:[0-9]+  	| tr -s ':' ' ' 	| awk '{print $2}')"',
+			rxoverruns:"$(ifconfig $IFACE 	 	| grep -v lo |  grep RX | egrep -o overruns\:[0-9]+ 	| tr -s ':' ' ' 	| awk '{print $2}')"',
+			rxframe:"$(ifconfig $IFACE    	 	| grep -v lo |  grep RX | egrep -o frame\:[0-9]+	 	| tr -s ':' ' ' 	| awk '{print $2}')"',
+			rxbytes:"$(ifconfig $IFACE 		 	| grep -v lo |  grep RX | egrep -o bytes\:[0-9]+ 		| tr -s ':' ' ' 	| awk '{print $2}')"',
+			txpackets:"$(ifconfig $IFACE  	 	| grep -v lo |  grep TX | egrep -o packets\:[0-9]+  	| tr -s ':' ' ' 	| awk '{print $2}')"',
+			txerrors:"$(ifconfig $IFACE   	 	| grep -v lo |  grep TX | egrep -o errors\:[0-9]+   	| tr -s ':' ' ' 	| awk '{print $2}')"',
+			txdropped:"$(ifconfig $IFACE  	 	| grep -v lo |  grep TX | egrep -o dropped\:[0-9]+  	| tr -s ':' ' ' 	| awk '{print $2}')"',
+			txoverruns:"$(ifconfig $IFACE 	 	| grep -v lo |  grep TX | egrep -o overruns\:[0-9]+ 	| tr -s ':' ' ' 	| awk '{print $2}')"',
+			txcarrier:"$(ifconfig $IFACE  	 	| grep -v lo |  grep TX | egrep -o carrier\:[0-9]+  	| tr -s ':' ' ' 	| awk '{print $2}')"',
+			txqueuelen:"$(ifconfig $IFACE 	 	| grep -v lo | egrep -o txqueuelen\:[0-9]+ 				| tr -s ':' ' ' | awk '{print $2}')"',
+			txbytes:"$(ifconfig $IFACE 		 	| grep -v lo | grep TX | egrep -o bytes\:[0-9]+ 		| tr -s ':' ' ' | awk '{print $2}')"',
+			collisions:"$(ifconfig $IFACE  	 	| grep -v lo | egrep -o collisions\:[0-9]+ 				| tr -s ':' ' ' | awk '{print $2}')"',
+			ipv4address:'"$(ifconfig $IFACE  	| grep -v lo | egrep -o inet\ addr\:[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\} | tr -s ':' ' ' | awk '{print $3}')"',
+			broadcast:'"$(ifconfig $IFACE 		| grep -v lo | egrep -o Bcast\:[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\} | tr -s ':' ' ' | awk '{print $2}')"',
+			netmask:'"$(ifconfig $IFACE  		| grep -v lo | egrep -o Mask\:[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\} | tr -s ':' ' ' | awk '{print $2}')"',
+			gateway:'"$(route | grep default 	| grep -v lo | grep UG | grep wlan0 | awk '{print $2}' | head -n1)",
+			ipv6addr:'"$(ifconfig $IFACE 		| grep -v lo | egrep -o inet6\ addr\:\ \([a-fA-F0-9]\{1,4}\:\{1,2\}[a-fA-F0-9]\{1,4}\:\{1,2\}\)+[A-Fa-f0-9\/^\ ]+)"',
+			ipv6scope:'"$(ifconfig $IFACE 	    | grep -v lo | egrep -o Scope\:[a-zA-Z]+)"',
+		}"
+done
+JSON_DISKIO="";
+for DISK in $(echo $DISK_RAW_DATA | awk '{print $1}'); do
+	JSON_DISKIO=$JSON_DISKIO"{device:'$DISK',tps:"$(echo $DISK_RAW_DATA | awk '{print $2}')",rps:"$(echo $DISK_RAW_DATA | awk '{print $3}')",wps"$(echo $DISK_RAW_DATA | awk '{print $4}')"},"
+done
+JSON="stats:{
+		timestamp:"$(date|tr -s ' ' '-')",
+		collectionTimes:{started:$TIMESTARTED,completed:$TIMECOMPLETED},
+		cpu:{
+			avgBogoMips:"$(echo "print ($(cat /proc/cpuinfo |grep bogomips|awk '{print $3}'|tr -s '\n' '+')0)/$CPU_CORE_COUNT" | python)",
+			coreCount:"$(echo $CPU_CORE_COUNT)",
+			loadavg:["$(echo $LOADAVG | tr -s ' ' ',')"],
+		},
+		memory:{
+			free:$(echo $MEMINFO | grep MemFree | awk '{print $2}'),
+			total:$(echo $MEMINFO | grep MemTotal | awk '{print $2}'),
+			cache:$(cat /proc/meminfo | grep Cached | grep -v Swap | awk '{print $2}'),
+		},
+		swap:{
+			free:$(echo $MEMINFO | grep SwapFree | awk '{print $2}'),
+			total:$(echo $MEMINFO | grep SwapTotal | awk '{print $2}'),
+			cache:$(echo $MEMINFO | grep SwapCached | awk '{print $2}'),
+		},
+		diskio:{
+			count:"$(echo $DISK_RAW_DATA | awk '{print $1}' | wc -l)",
+			data:["$JSON_DISKIO"],
+		},
+		netio:{
+				count:"$NET_DEV_COUNT",data:["$JSON_NETIO"]
+		},
+	}"
+[ ! -d $ARCHIVE_STORE_DIR ] && {
+	logger "ERROR!  $0 could not find $ARCHIVE_STORE_DIR  Creating Directory!"
+	[ ! -d $ARCHIVE_STORE_DIR ] && { logger "ERROR! $0 failed to create $ARCHIVE_STORE_DIR.  Exiting!"; exit 1}
+}
+if [ ! -f $CURRENT_STORE ]; then
+	logger "ERROR! $0 could not find $CURRENT_STORE file in $STORE_ROOT.  This may mean you are just starting up."
+	
+else
+	logger "$0 is archiving $CURRENT_STORE to $ARCHIVE_STORE"
+	mv $CURRENT_STORE $ARCHIVE_STORE
+	rm $(ls -t $ARCHIVE_STORE_DIR | tail -n$(((ls | wc -l) - 3)))
+fi
+echo $JSON > /proc/JSONstats.log

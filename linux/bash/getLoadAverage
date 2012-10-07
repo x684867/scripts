@@ -1,0 +1,10 @@
+#!/bin/bash
+#
+#	getLoadAverage.sh
+#
+#	(c) 2011 Sam Caldwell.  Public Domain.
+#
+#	This script fetches and parses /proc/loadavg into a space-delimited
+#	string of the 5-, 10-, and 15-minute intervals.
+#
+echo $(cat /proc/loadavg | egrep -o [0-9]\{1,4\}\.[0-9]{2}\ | tr -s ' ' '\n' | tr -s '\n' ' ' | sed -e 's/\ \{1,\}$//')

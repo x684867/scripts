@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+#	Test SSH Connectivity (isNetConnected)
+#	(c) 2011 Sam Caldwell. All Rights Reserved.
+#
+#	This script will check SSH connectivity given a user and host.
+#       The user must have access to /usr/bin/whoami.
+#
+SSHUSER=$1
+SSHHOST=$2
+
+EXIT_SUCCESS=0
+EXIT_ERROR_BADUSER=1
+EXIT_ERROR_BADHOST=2
+EXIT_ERROR_NOCONNECT=3
+
+[ -z "$SSHUSER" ] && echo $EXIT_ERROR_BADUSER && exit $EXIT_ERROR_BADUSER
+[ -z "$SSHHOST" ] && echo $EXIT_ERROR_BADHOST && exit $EXIT_ERROR_BADHOST
+
+[ "$(ssh $SSHUSER@$SSHHOST '/usr/bin/whoami')" == "$SSHUSER" ] && {
+      echo $EXIT_SUCCESS
+      exit $EXIT_SUCCESS
+}
+
+echo $EXIT_ERROR_NOCONNECT
+exit $EXIT_ERROR_NOCONNECT

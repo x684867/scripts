@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# verifyUserExists.sh
+#
+#	(c) 2011 Sam Caldwell.  All Rights Reserved.
+#
+#	This script will verify that a given user exists.
+#
+#	INPUTS:
+#			$1 ...user to be verified.
+#	
+#	OUTPUT:
+#			"0" ...user exists
+#			"1" ...user does not exist
+#			"2" ...error state exist
+#
+[ -z "$1" ] && { echo "2"; exit 2; }
+USERSTATE="$(id -u $1 2>1 | tr -s 'A-Za-z' ' ')"
+if [ ! -z "$USERSTATE" ]; then
+	echo "0"
+	exit 0
+else
+	echo "1"
+	exit 1
+fi

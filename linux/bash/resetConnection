@@ -1,0 +1,96 @@
+#! /bin/bash
+#
+#	resetConnection
+#
+#	(c) 2010 Sam Caldwell. Public Domain.
+#
+#	This script is released to the public domain WITHOUT any warranty
+#	whatsoever, either expressed or implied by the author or any party
+#	affiliated therewith.  Use of this script by any person is at the person's
+#	own risk.
+#
+#	Using this script, the user may check connectivity (via ICMP) to a target
+#	host and if disconnected, execute the given payload to reset the connection.
+#
+#	NOTES:
+#			Usage:
+#
+#					resetConnection   
+#
+#			Compatibility:
+#				
+#				This script was written for and tested under Ubuntu 10.04,
+#				10.10 and Debian 5.04 (under both i686 and x86_64).
+#
+#			Implementation:
+#
+#				1. Copy this script to a local text file.
+#				2. Edit the connected and disconnected payload 
+#				3. Remove the 'print "Connected"' and 'print "Disconnected"'
+#				   lines.
+#
+#			Usage Example:
+#				
+#				1. A remote server overseas has an SSH daemon running for remote
+#				   access and/or the same server provides an SSL/IPSEC tunnel from
+#				   the corporate office to the remote office.
+#
+#				2. An undetermined error has occurred, causing a connectivity failure 
+#				   between the remote office and home office.  This error requires the
+#				   restart of SSH, SSLVPN or IPSEC services to restore connectivity.
+#	
+#				3. By deploying this script to the remote servers, the resetConnection
+#				   script can be added as a cron job to execute every five minutes.  As
+#				   the script executes periodically, as soon as a connectivity failure 
+#				   is detected, the provided payload script will be executed.
+#
+syslog=/usr/bin/logger;
+
+printUsage(){
+	echo ""
+	echo "USAGE:"
+	echo "		resetConnection   "
+	echo ""
+	echo "	The failed payload executable is run whenever connectivity to the target host is lost.  Otherwise the success payload is run."
+}
+
+[ -z $1 ] && {
+	echo "Missing target hostname"
+	printUsage
+	exit 1
+}
+
+[ -z $2 ] && {
+	echo "Missing SuccessPayloadExecutable"
+	printUsage
+	exit 1
+}
+[ -z $3 ] && {
+	echo "Missing FailedPayloadExecutable"
+	printUsage
+	exit 1
+}
+
+TARGET=$1
+SUCCESSPAYLOAD=$2
+FAILEDPAYLOAD=$3
+
+CONNECTIVITY=$(ping -c1 $TARGET 2>&1 | tail -n2 | head -n1 | tr -d ',%' | gawk '{print $6}')
+
+if [ "$CONNECTIVITY" == '0' ]; then
+	# Replace the following line with an arbitrary payload to be executed
+	# when local host is connected to target host.
+	#
+	$syslog "resetConnection: Connection verified (target_host=$TARGET,payloadExecutable=$PAYLOAD)"
+	$SUCCESSPAYLOAD
+else
+	#
+	# Replace the following line with an arbitrary payload to be executed
+	# when the local host is disconnected to the target host.
+	#
+	$syslog "resetConnection: Connection failed (target_host=$TARGET,payloadExecutable=$PAYLOAD)"
+	$FAILEDPAYLOAD
+	#
+	# End of 'disconnected' payload.
+	#
+fi

@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+#   dfparse (df parser script)
+#
+#   (c) 2010 Sam Caldwell. Public Domain.
+#
+#   This script is released to the public domain WITHOUT any warranty
+#   whatsoever, either expressed or implied by the author or any party
+#   affiliated therewith. Use of this script by any person is at the
+#   person's own risk.
+#
+FIELD=$1
+[ -z $1 ] && {
+
+echo " "
+echo " ERROR! Missing argument."
+echo " "
+echo "   Usage:"
+echo "      $0 <field_number>"
+echo " "
+echo "   'field_number' is determined as the field position"
+echo "   from the left to the right. The fields"
+echo "   are listed below."
+echo " "
+echo "      Pos|Field Name"
+echo "      1. |device_name"
+echo "      2. |total_size"
+echo "      3. |space_used"
+echo "      4. |space_avail"
+echo "      5. |percent_used"
+echo "      6. |mount_point"
+echo " "
+exit 1
+}
+
+case $FIELD in
+1) FIELD=1 ;;
+2) FIELD=2 ;;
+3) FIELD=3 ;;
+4) FIELD=4 ;;
+5) FIELD=5 ;;
+6) FIELD=6 ;;
+*) FIELD=1 ;;
+esac
+
+DISK_STATS=$(df 2>&1 | grep $(df 2>&1 | gawk '{print $1}' | grep /dev) )
+
+DEVICE_LIST=$(echo $DISK_STATS 2>&1 | tr -s ' ' '\t' | cut -f $FIELD -s)
+
+echo $DEVICE_LIST

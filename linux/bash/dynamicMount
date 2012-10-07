@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+#	dynamicMount.sh
+#
+#	(c) Sam Caldwell.  Public Domain
+#
+#	This script is a dynamic mount script which identifies all storage
+#	partitions on a given system and mounts them to a point in the file
+#	system of the same name.  For example, /dev/hda1 would mount to 
+#	/mnt/hda1 after creating /mnt/hda1.
+#
+for i in $(fdisk -l | sed 1,7d | gawk '{print $1}'); do
+	DEV=$(echo $i);
+	MNT=$(echo $i | sed -e s/dev/mnt/);
+	mkdir -p $MNT
+	mount -rwt ext3 $DEV $MNT
+done

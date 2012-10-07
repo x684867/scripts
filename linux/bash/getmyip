@@ -1,0 +1,21 @@
+#! /bin/bash
+#
+# getmyip
+#
+# (c) 2010 Sam Caldwell. Public Domain.
+#
+# This script will parse the output of ifconfig to return only
+# the IP address of a given interface (if specified). If no 
+# interface is specified, a list of all IP addresses for all
+# interfaces will be given.
+#
+# USAGE:
+# getmyip [interface]
+#
+
+[ -z $1 ] && {
+for i in $(ifconfig | grep Link\ encap | gawk '{print $1}'); do
+$0 $i;
+done
+exit 0
+}

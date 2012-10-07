@@ -1,0 +1,239 @@
+#!/bin/bash
+#
+#	nodeHappiness.sh
+#
+#	(c) 2011 Sam Caldwell.  Public Domain.
+#
+#	This script calculates 'node happiness' based on
+#	real-time performance and the weights specified 
+#      in $CONFIG.
+CONFIG=nodeHappiness.conf
+SCRIPT_DIR=./
+HAPPINESS_LOG=nodeHappiness.log
+
+function file_missing {
+		echo " "
+		echo "Oops!  The $0 reports $1 is missing."
+		echo " "
+		exit 1
+}
+#
+# Load Configuration File:
+#
+	SCRIPT_DIR=$(echo $SCRIPT_DIR | sed -e 's/\/\{1,\}$//')
+	#
+	# Verify the existence of the configuration file.
+	#
+	[ ! -f $CONFIG ] && { 
+		echo " "
+		echo "Oops! The configuration file ( $CONFIG ) is missing."
+		echo " "
+		exit 1 
+	}
+	#
+	# Verify that the script directory (SCRIPT_DIR) exists.
+	#
+	[ ! -d $SCRIPT_DIR ] && {
+		echo " "
+		echo "Oops! The script directory ( $SCRIPT_DIR ) specified in "
+		echo "$0 is not found or not accessible."
+		echo " "
+		exit 1
+	}
+	#
+	# Verify the configuration parser script (parseConf) exists.
+	#
+	CONF_PARSER_SCRIPT=$SCRIPT_DIR/parseConf.sh
+	[ ! -f $CONF_PARSER_SCRIPT ]&& file_missing $CONF_PARSER_SCRIPT
+	#
+	# Load the names of all supporting scripts from the configuration file
+	# and check that each named file exists.
+	#
+	BOGOMIPS_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG BOGOMIPS_SCRIPT text)
+		[ ! -f $BOGOMIPS_SCRIPT ] && file_missing $BOGOMIPS_SCRIPT
+	LOADAVERAGE_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG LOADAVERAGE_SCRIPT text)
+		[ ! -f $LOADAVERAGE_SCRIPT ] && file_missing $LOADAVERAGE_SCRIPT
+	MEMFREE_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG MEMFREE_SCRIPT text)
+		[ ! -f $MEMFREE_SCRIPT ] && file_missing $MEMFREE_SCRIPT
+	SWAPFREE_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG SWAPFREE_SCRIPT text)
+		[ ! -f $SWAPFREE_SCRIPT ] && file_missing $SWAPFREE_SCRIPT
+	DISKTPS_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG DISKTPS_SCRIPT text)
+		[ ! -f $DISKTPS_SCRIPT ] && file_missing $DISKTPS_SCRIPT 
+	DISKREAD_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG DISKREAD_SCRIPT text)
+		[ ! -f $DISKREAD_SCRIPT ] && file_missing $DISKREAD_SCRIPT 
+	DISKWRITE_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG DISKWRITE_SCRIPT text)
+		[ ! -f $DISKWRITE_SCRIPT ] && file_missing $DISKWRITE_SCRIPT 
+	NETSPEEDIN_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG NETSPEEDIN_SCRIPT text)
+		[ ! -f $NETSPEEDIN_SCRIPT ] && file_missing $NETSPEEDIN_SCRIPT 
+	NETSPEEDOUT_SCRIPT=$SCRIPT_DIR/$($CONF_PARSER_SCRIPT $CONFIG NETSPEEDOUT_SCRIPT text)
+		[ ! -f $NETSPEEDOUT_SCRIPT ] && file_missing $NETSPEEDOUT_SCRIPT 
+	#
+	# Load and verify the data values: OVER/UNDER-THRESHOLD VALUES
+	UNDERTHRESHOLD=$($CONF_PARSER_SCRIPT $CONFIG UNDERTHRESHOLD number)
+		[ -z $UNDERTHRESHOLD ] && echo "Failed to load UNDERTHRESHOLD" && exit 1
+	OVERTHRESHOLD=$($CONF_PARSER_SCRIPT $CONFIG OVERTHRESHOLD number)
+		[ -z $OVERTHRESHOLD ] && echo "Failed to load OVERTHRESHOLD" && exit 1
+	#
+	# Load and verify the data values: FACTOR-SPECIFIC-WEIGHT VALUES
+	#
+	CPUBOGOMIPS=$($CONF_PARSER_SCRIPT $CONFIG CPUBOGOMIPS number)
+		[ -z $CPUBOGOMIPS ] && echo "Failed to load CPUBOGOMIPS" && exit 1
+	CPULOADAVERAGE=$($CONF_PARSER_SCRIPT $CONFIG CPULOADAVERAGE array)
+		[ -z $CPULOADAVERAGE ] && echo "Failed to load CPULOADAVERAGE" && exit 1
+	MEMFREE=$($CONF_PARSER_SCRIPT $CONFIG MEMFREE number)
+		[ -z $MEMFREE ] && echo "Failed to load MEMFREE" && exit 1
+	SWAPFREE=$($CONF_PARSER_SCRIPT $CONFIG SWAPFREE number)
+		[ -z $SWAPFREE ] && echo "Failed to load SWAPFREE" && exit 1
+	DISKTPS=$($CONF_PARSER_SCRIPT $CONFIG DISKTPS number)
+		[ -z $DISKTPS ] && echo "Failed to load DISKTPS" && exit 1
+	DISKREADSMBPS=$($CONF_PARSER_SCRIPT $CONFIG DISKREADSMBPS number)
+		[ -z $DISKREADSMBPS ] && echo "Failed to load DISKREADSMBPS" && exit 1
+	DISKWRITESMBPS=$($CONF_PARSER_SCRIPT $CONFIG DISKWRITESMBPS number)
+		[ -z $DISKWRITESMBPS ] && echo "Failed to load DISKWRITESMBPS" && exit 1
+	NETINBPS=$($CONF_PARSER_SCRIPT $CONFIG NETINBPS number)
+		[ -z $NETINBPS ] && echo "Failed to load NETINBPS" && exit 1
+	NETOUTBPS=$($CONF_PARSER_SCRIPT $CONFIG NETOUTBPS number)
+		[ -z $NETOUTBPS ] && echo "Failed to load NETOUTBPS" && exit 1
+	#
+	# Load and Verify the data values: FACTOR-SPECIFIC-THRESHOLDS
+	#
+	CPUBOGOMIN=$($CONF_PARSER_SCRIPT $CONFIG CPUBOGOMIN number)
+		[ -z $CPUBOGOMIN ] && echo "Failed to load CPUBOGOMIN" && exit 1
+	CPUBOGOMAX=$($CONF_PARSER_SCRIPT $CONFIG CPUBOGOMAX number)
+		[ -z $CPUBOGOMAX ] && echo "Failed to load CPUBOGOMAX" && exit 1
+	CPULOADMIN=$($CONF_PARSER_SCRIPT $CONFIG CPULOADMIN array)
+		[ -z $CPULOADMIN ] && echo "Failed to load CPULOADMIN" && exit 1
+	CPULOADMAX=$($CONF_PARSER_SCRIPT $CONFIG CPULOADMAX array)
+		[ -z $CPULOADMAX ] && echo "Failed to load CPULOADMAX" && exit 1
+	MEMFREEMIN=$($CONF_PARSER_SCRIPT $CONFIG MEMFREEMIN number)
+		[ -z $MEMFREEMIN ] && echo "Failed to load MEMFREEMIN" && exit 1
+	MEMFREEMAX=$($CONF_PARSER_SCRIPT $CONFIG MEMFREEMAX number)
+		[ -z $MEMFREEMAX ] && echo "Failed to load MEMFREEMAX" && exit 1
+	SWAPFREEMIN=$($CONF_PARSER_SCRIPT $CONFIG SWAPFREEMIN number)
+		[ -z $SWAPFREEMIN ] && echo "Failed to load SWAPFREEMIN" && exit 1
+	SWAPFREEMAX=$($CONF_PARSER_SCRIPT $CONFIG SWAPFREEMAX number)
+		[ -z $SWAPFREEMAX ] && echo "Failed to load SWAPFREEMAX" && exit 1
+	DISKTPSMIN=$($CONF_PARSER_SCRIPT $CONFIG DISKTPSMIN number)
+		[ -z $DISKTPSMIN ] && echo "Failed to load DISKTPSMIN" && exit 1
+	DISKTPSMAX=$($CONF_PARSER_SCRIPT $CONFIG DISKTPSMAX number)
+		[ -z $DISKTPSMAX ] && echo "Failed to load DISKTPSMAX" && exit 1
+	DISKREADSMBPSMIN=$($CONF_PARSER_SCRIPT $CONFIG DISKREADSMBPSMIN number)
+		[ -z $DISKREADSMBPSMIN ] && echo "Failed to load DISKREADSMBPSMIN" && exit 1
+	DISKREADSMBPSMAX=$($CONF_PARSER_SCRIPT $CONFIG DISKREADSMBPSMAX number)
+		[ -z $DISKREADSMBPSMAX ] && echo "Failed to load DISKREADSMBPSMAX" && exit 1
+	DISKWRITESMBPSMIN=$($CONF_PARSER_SCRIPT $CONFIG DISKWRITESMBPSMIN number)
+		[ -z $DISKWRITESMBPSMIN ] && echo "Failed to load DISKWRITESMBPSMIN" && exit 1
+	DISKWRITESMBPSMAX=$($CONF_PARSER_SCRIPT $CONFIG DISKWRITESMBPSMAX number)
+		[ -z $DISKWRITESMBPSMAX ] && echo "Failed to load DISKWRITESMBPSMAX" && exit 1
+	NETINBPSMIN=$($CONF_PARSER_SCRIPT $CONFIG NETINBPSMIN number)
+		[ -z $NETINBPSMIN ] && echo "Failed to load NETINBPSMIN" && exit 1
+	NETINBPSMAX=$($CONF_PARSER_SCRIPT $CONFIG NETINBPSMAX number)
+		[ -z $NETINBPSMAX ] && echo "Failed to load NETINBPSMAX" && exit 1
+	NETOUTBPSMIN=$($CONF_PARSER_SCRIPT $CONFIG NETOUTBPSMIN number)
+		[ -z $NETOUTBPSMIN ] && echo "Failed to load NETOUTBPSMIN" && exit 1
+	NETOUTBPSMAX=$($CONF_PARSER_SCRIPT $CONFIG NETOUTBPSMAX number)
+		[ -z $NETOUTBPSMAX ] && echo "Failed to load NETOUTBPSMAX" && exit 1
+#
+# Configuration load is finished.
+#
+# -------------------------------
+#
+# Compute "Adjusted Average BogoMIPS" (AAB):
+#
+AAB=$($SCRIPT_DIR/$BOGOMIPS_SCRIPT)
+[ $(echo "$AAB < $CPUBOGOMIN" | bc -q) -eq 1 ] && AAB=$(echo "$AAB * $OVERTHRESHOLD * $CPUBOGOMIPS" | bc -q)
+[ $(echo "$AAB > $CPUBOGOMAX" | bc -q) -eq 1 ] && AAB=$(echo "$AAB * $UNDERTHRESHOLD * $CPUBOGOMIPS" | bc -q)
+#
+# Compute the "Weighted Percent of Free Memory" (WPMF):
+#
+WPMF=$($SCRIPT_DIR/$MEMFREE_SCRIPT)
+[ $(echo "$WPMF < $MEMFREEMIN" | bc -q) -eq 1 ] && WPMF=$(echo "$WPMF * $OVERTHRESHOLD * $MEMFREE" | bc -q )
+[ $(echo "$WPMF > $MEMFREEMAX" | bc -q) -eq 1 ] && WPMF=$(echo "$WPMF * $UNDERTHRESHOLD * $MEMFREE" | bc -q )
+#
+# Compute the "Weighted Percent of Free Swap" (WPFS):
+#
+WPFS=$($SCRIPT_DIR/$SWAPFREE_SCRIPT)
+[ $(echo "$WPFS < $SWAPFREEMIN" | bc -q) -eq 1 ] && WPFS=$(echo "$WPFS * $OVERTHRESHOLD * $SWAPFREE" | bc -q )
+[ $(echo "$WPFS > $SWAPFREEMAX" | bc -q) -eq 1 ] && WPFS=$(echo "$WPFS * $UNDERTHRESHOLD * $SWAPFREE" | bc -q )
+#
+# Compute the "Weighted Disk Transactions-Per-Second" (TPS):
+#
+TPS=$($SCRIPT_DIR/$DISKTPS_SCRIPT)
+[ $(echo "$TPS < $DISKTPSMIN" | bc -q) -eq 1 ] && TPS=$(echo "$TPS * $OVERTHRESHOLD * $DISKTPS" | bc -q )
+[ $(echo "$TPS > $DISKTPSMAX" | bc -q) -eq 1 ] && TPS=$(echo "$TPS * $UNDERTHRESHOLD * $DISKTPS" | bc -q )
+#
+# Compute the "Volume of Disk Reads (MBps)" (VDR):
+#
+VDR=$($SCRIPT_DIR/$DISKREAD_SCRIPT)
+[ $(echo "$VDR < $DISKREADSMBPSMIN" | bc -q) -eq 1 ] && VDR=$(echo "$VDR * $OVERTHRESHOLD * $DISKREADSMBPS" | bc -q )
+[ $(echo "$VDR > $DISKREADSMBPSMAX" | bc -q) -eq 1 ] && VDR=$(echo "$VDR * $UNDERTHRESHOLD * $DISKREADSMBPS" | bc -q )
+#
+# Compute the "Volume of Disk Writes (MBps)" (VDW):
+#
+VDW=$($SCRIPT_DIR/$DISKWRITE_SCRIPT)
+[ $(echo "$VDW < $DISKWRITESMBPSMIN" | bc -q) -eq 1 ] && VDW=$(echo "$VDW * $OVERTHRESHOLD * $DISKWRITESMBPS" | bc -q )
+[ $(echo "$VDW > $DISKWRITESMBPSMAX" | bc -q) -eq 1 ] && VDW=$(echo "$VDW * $UNDERTHRESHOLD * $DISKWRITESMBPS" | bc -q )
+#
+# Compute the "Volume of Bits Per Second (BPS) of inbound network traffic" (NI)
+#
+NI=$($SCRIPT_DIR/$NETSPEEDIN_SCRIPT)
+[ $(echo "$NI < $NETINBPSMIN" | bc -q) -eq 1 ] && NI=$(echo "$NI * $OVERTHRESHOLD * $NETINBPS" | bc -q )
+[ $(echo "$NI > $NETINBPSMAX" | bc -q) -eq 1 ] && NI=$(echo "$NI * $UNDERTHRESHOLD * $NETINBPS" | bc -q )
+#
+# Compute the "Volume of Bits Per Second (BPS) of outbound network traffic" (NO)
+#
+NO=$($SCRIPT_DIR/$NETSPEEDOUT_SCRIPT)
+[ $(echo "$NO < $NETOUTBPSMIN" | bc -q) -eq 1 ] && NO=$(echo "$NO * $OVERTHRESHOLD * $NETOUTBPS" | bc -q )
+[ $(echo "$NO > $NETOUTBPSMAX" | bc -q) -eq 1 ] && NO=$(echo "$NO * $UNDERTHRESHOLD * $NETOUTBPS" | bc -q )
+#
+# If there is no HAPPINESS_LOG, then create a blank file...
+#
+[ ! -f $HAPPINESS_LOG ] && touch $HAPPINESS_LOG
+#
+# AGGREGATE THE FACTORS OF "NODE HAPPINESS"
+#
+#	ACH: Aggregate Current Happiness (raw score)
+#	MNAH: Minimum Aggregate Happiness (lowest ACH)
+#	MXAH: Maximum Aggregate Happiness (highesh ACH)
+#
+ACH=$(echo "$AAB + $WPMF + $WPFS + $TPS + $VDR + $VDW + $NI + $NO" | bc -q )
+
+MNAH=$(cat $HAPPINESS_LOG | egrep -o MNAH\:[0-9]+\.[0-9]+\, | egrep -o [0-9]+\.[0-9]+)
+	[ -z $MNAH ] && MNAH=$( echo "$ACH * 0.95" | bc -q )
+	[ $(echo "$ACH < $MNAH" | bc -q) -eq 1 ] && MNAH=$ACH
+MXAH=$(cat $HAPPINESS_LOG | egrep -o MXAH\:[0-9]+\.[0-9]+\, | egrep -o [0-9]+\.[0-9]+)
+	[ -z $MXAH ] && MXAH=$( echo "$ACH * 1.05" | bc -q )
+	[ $(echo "$ACH > $MXAH" | bc -q) -eq 1 ] && MXAH=$ACH
+#
+# HAPPINESS={-100...+100} relative to minimum and maximum aggregate happiness.
+#
+P_HAPPINESS=$(cat $HAPPINESS_LOG | egrep -o C_HAPPINESS\:[\-]\{,1\}[0-9]+\, | egrep -o [\-]*[0-9]+ )
+	[ -z $P_HAPPINESS ] && C_HAPPINESS=0
+
+C_HAPPINESS=$(echo "200 * ($ACH - $MNAH) / ($MXAH - $MNAH) - 100" | bc -q)
+
+P_TIME=$(cat $HAPPINESS_LOG | egrep -o TIMESTAMP\:\-\{\,\}[0-9]+\, | egrep -o [0-9]+ )
+C_TIME=$(date +"%s")
+	[ -z $P_TIME ] && P_TIME=$(($C_TIME - 1))
+
+P_DELTA=$(cat $HAPPINESS_LOG | egrep -o DELTA\:[\-]\{,1\}[0-9]+ | egrep -o [\-]*[0-9]+ )
+	[ -z $P_DELTA ] && P_DELTA=1
+
+DELTA=$(echo "( $C_HAPPINESS - $P_HAPPINESS ) / ( $C_TIME - $P_TIME )" | bc -q)
+ACCELERATION=$(echo "($DELTA - $P_DELTA) / ($C_TIME - $P_TIME)" | bc -q)
+#
+# Write the Happiness value to syslog and write it to the HAPPINESS_LOG
+#
+logger "nodeHappiness:{score:$C_HAPPINESS,prev_score:$P_HAPPINESS,delta:$DELTA,min:$MNAH,max:$MXAH,curr:$ACH\}"
+
+echo "{" 											>  $HAPPINESS_LOG
+echo "	TIMESTAMP:$C_TIME," 						>> $HAPPINESS_LOG
+echo "	INTERVAL:$(( $C_TIME - $P_TIME ))," 		>> $HAPPINESS_LOG
+echo "	C_HAPPINESS:$C_HAPPINESS," 					>> $HAPPINESS_LOG
+echo "	P_HAPPINESS:$P_HAPPINESS," 					>> $HAPPINESS_LOG
+echo "	DELTA:$DELTA," 								>> $HAPPINESS_LOG
+echo "	ACCELERATION:$ACCELERATION," 				>> $HAPPINESS_LOG
+echo "	ACH:$ACH," 									>> $HAPPINESS_LOG
+echo "	MXAH:$MXAH," 								>> $HAPPINESS_LOG
+echo "	MNAH:$MNAH," 								>> $HAPPINESS_LOG
+echo "}"											>> $HAPPINESS_LOG

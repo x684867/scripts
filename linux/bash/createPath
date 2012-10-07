@@ -1,0 +1,95 @@
+#!/bin/bash
+#
+# createPath.sh
+#
+#	(c) 2011 Sam Caldwell.  All Rights Reserved.
+#
+#	This script creates the given path and changes the owner to the 
+#	specified user account.  Permissions are also set to the specified
+#	values.
+#
+DEPENDENCY_LIST="gawk tr wc mkdir chown chmod id"
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+	echo " "
+	echo "USAGE:"
+	echo " "
+	echo "      $0 [--help -h]"
+	echo " "
+	echo "			Returns this help screen."
+	echo " "
+	echo "		$0 FILE_PATH OWNER PERMISSION"
+	echo " "
+	echo "			Creates FILE_PATH and assigns ownership to OWNER with"
+	echo "			the specified octal PERMISSION."
+	echo " "
+	echo "			All parameters must be explicitly provided.  No defaults"
+	echo "			exist."
+	echo " "
+	echo "RETURN CODES (stdout):"
+	echo " "
+	echo "		0	...NO ERROR."
+	echo "		1	...ERROR_PATH_EXISTS"
+	echo "		2	...ERROR_UNKNOWN"
+	echo "		3	...ERROR_INVALID_OWNER"
+	echo "		4	...ERROR_INVALID_PERMISSION"
+	echo "		5	...ERROR_CHOWN_FAILED"
+	echo "		6	...ERROR_CHMOD_FAILED"
+	echo "		7	...ERROR_CANNOT_CREATE_DIRECTORY"
+	echo "		8	...ERROR_MISSING_DEPENDENCY"
+	echo " "
+	echo "DEPENDENCIES:"
+	echo " "
+	echo "		The following utility programs must be installed and their"
+	echo "		locations must be in the current PATH:"
+	echo " "
+	for i in $DEPENDENCY_LIST; do echo "				$i"; done
+	echo " " 
+	exit 0
+fi
+for i in $DEPENDENCY_LIST; do 
+	if [ -z "$(/usr/bin/which $i)" ]; then
+		echo "8"
+		exit 8
+	fi
+done
+if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
+	echo "2"
+	exit 2
+else
+	FILEPATH=$1
+	if [ -d $FILEPATH ]; then
+		echo "1"
+		exit 1
+	else
+		OWNER=$2
+		if [ -z "$(id -u $OWNER 2>1 | tr -s 'A-Za-z' ' ')" ]; then
+			echo "3"
+			exit 3
+		else
+			PERMISSION=$3
+			if [ "$(echo $PERMISSION | wc -c)" != "4" ] || \
+		       [ "$(echo $PERMISSION | tr -c 0-7 ' ' | tr -d ' ' | wc -c)" != "3" ]; then
+					echo "1"
+					exit 1
+			else
+				mkdir -p $FILEPATH
+				if [ ! -d $FILEPATH ]; then
+					echo "7"
+					exit 7
+				else
+					if [ "$(chown -v $OWNER $FILEPATH 2>1 | gawk '{print $1}')" == "failed" ]; then
+						echo "5"
+						exit 5
+					else
+						if [ "$(chmod -v $PERMISSION $FILEPATH 2>1 | gawk '{print $1}')" == "failed" ]; then
+							echo "6"
+							exit 6
+						fi
+					fi
+				fi
+			fi
+		fi
+	fi
+fi
+echo "0"
+exit 0

@@ -1,0 +1,45 @@
+#!/bin/bash
+#
+#	getNetSpeedOut.sh
+#
+#	(c) 2011 Sam Caldwell.  Public Domain.
+#
+#	This script calculates the total volume of data (Bytes per second) written
+#	to a network interface.
+#
+if [ -z $1 ]; then
+	#No interface specified.  Determine default route.
+	IFACE=$(route | egrep default\ +[a-zA-Z0-9\_\.\-]+\ +[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\ +UG\ +[0-9]+\ +[0-9]+\ +[0-9]+\ +[a-zA-Z]\{1,10\}[0-9]\{1,2\} | awk '{print $8}')
+	
+	[ -z $IFACE ] && {
+		logger "$0 was executed without a specified interface."
+		logger "$0 Check usage information ( $0 --help )."
+		exit 1
+	}
+else
+	[ "$1" == "-h" ] || [ "$1" == [ "$2" == "--help" ] && {
+		echo " "
+		echo "USAGE:"
+		echo "			$0 [interface_name]"
+		echo " "
+		echo "		If no interface_name is specified, then the script will"
+		echo "		parse the routing table for the first default route's "
+		echo "      which will be used instead."
+		echo " "
+		exit 1
+	}
+	#Verify the interface exists.
+	IFACE=$1
+	[ "$(ifconfig $IFACE 2>&1 | grep Link | grep wlan0 | head -n1 | awk '{print $1}')" != "$IFACE" ] && {
+		logger "$0 was executed to measure network volume on interface '$IFACE' but the interface does not exist."
+		exit 1
+	}
+fi
+
+T1=$(date +"%s" &)
+P1=$(ifconfig $IFACE | egrep -o TX\ bytes\:[0-9]+ | egrep -o [0-9]+ &)
+sleep 2
+P2=$(ifconfig $IFACE | egrep -o TX\ bytes\:[0-9]+ | egrep -o [0-9]+ &)
+T2=$(date +"%s" )
+
+echo "$(( $(( $P2 - $P1 )) / $(( $T2 - $T1 )) ))"

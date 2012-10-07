@@ -1,0 +1,92 @@
+#!/bin/bash
+#
+# createApacheSite.sh
+#
+#	(c) 2011 Sam Caldwell.  All Rights Reserved.
+#
+#	This script will modify and apply a default apache configuration
+#	file to create a new web hosting area.
+#
+#	USAGE:
+#			createApacheSite $FILEPATH $DOMAIN_NAME $DOCUMENT_ROOT $IP_ADDRESS $ERROR_LOG $ACCESS_LOG
+#	INPUTS:
+#			$1 ...FILEPATH		...location and name of the Apache configuration file.
+#			$2 ...DOMAIN_NAME	...this is the FQDN of the site.
+#			$3 ...DOCUMENT_ROOT	...this is the FILEPATH of the document root.
+#			$4 ...IP_ADDRESS	...IP ADDRESS = {*:80, 0.0.0.0:80}
+#			$5 ...ERROR_LOG		...this is the location of the ERROR_LOG files.
+#			$6 ...ACCESS_LOG	...this is the location of the ACCESS_LOG files.
+#
+#ERROR CODES:
+	NO_ERROR=0
+	ERROR_MISSING_DEPENDENCY=1
+	ERROR_MISSING_PARAMETER=2
+	ERROR_FILEPATH_EXISTS=3
+	ERROR_FILE_READONLY=4
+	ERROR_INVALID_DOMAIN=5
+	ERROR_INVALID_IP=6
+	ERROR_DOCUMENT_ROOT_MISSING=7
+	ERROR_ERRORLOG_READONLY=8
+	ERROR_ROOT_REQUIRED=9
+	ERROR_FAILED_TO_CREATE_FILEPATH=10
+	ERROR_FAILED_TO_SET_FILEPATH_PERMISSION=11
+#SUBROUTINES:
+die() {
+	echo "$1"
+	exit $1
+}
+fwrite(){
+	echo $1 >> $2
+}
+#MAIN ROUTINE:
+DEPENDENCY_LIST="whoami tr gawk sed"
+for i in $DEPENDENCY_LIST; do 
+	if [ -z "$(/usr/bin/which $i)" ]; then
+		die $ERROR_MISSING_DEPENDENCY
+	fi
+done
+[ "$(whoami)" == "root" ] && die ERROR_ROOT_REQUIRED
+if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] || [ -z "$5" ] || [ -z "$6" ]; then
+	die $ERROR_MISSING_PARAMETER
+else
+	FILEPATH="$1";
+	[ -f $FILEPATH ] && {
+		[ ! -w $FILEPATH ] && die $ERROR_FILE_READONLY
+		die $ERROR_FILE_EXISTS
+	}
+	DOMAIN_NAME="$2"; 	[ "$(verifyDomainName.sh $DOMAIN_NAME)" !=0 ] && die $ERROR_INVALID_DOMAIN
+	IP_ADDRESS="$4";  	[ "$(verifyIPaddress.sh $IP_ADDRESS)" !=0 ] && die $ERROR_INVALID_IP
+	DOCUMENT_ROOT="$3"; [ ! -f "$DOCUMENT_ROOT" ] && die $ERROR_DOCUMENT_ROOT_MISSING
+	ERROR_LOG="$5";		[ -f $ERROR_LOG ] && [ ! -w $ERROR_LOG ] && die $ERROR_ERRORLOG_READONLY
+	ACCESS_LOG="$6";	[ -f $ACCESS_LOG ] && [ ! -w $ACCESS_LOG ] && die $ERROR_ACCESSLOG_READONLY
+	echo "" > $FILEPATH
+	[ ! -f $FILEPATH ] || [ ! -w $FILEPATH ] && die $ERROR_FAILED_TO_CREATE_FILEPATH
+	fwrite $FILEPATH "# Apache2 Configuration created by $0 on $(date)"
+	fwrite $FILEPATH "# (c) Sam Caldwell.  All Rights Reserved."
+	fwrite $FILEPATH "#"
+	fwrite $FILEPATH "<VirtualHost $IP_ADDRESS>"
+	fwrite $FILEPATH "	ServerAdmin webmaster@$DOMAIN_NAME"
+	fwrite $FILEPATH "	ServerName	$DOMAIN_NAME"
+	fwrite $FILEPATH "	# ServerAlias *.$DOMAIN_NAME"
+	fwrite $FILEPATH "	DocumentRoot $DOCUMENT_ROOT"
+	fwrite $FILEPATH "	LogLevel warn"
+	fwrite $FILEPATH "	ErrorLog $ERROR_LOG"
+	fwrite $FILEPATH "	CustomLog $ACCESS_LOG combined"
+	fwrite $FILEPATH "	<Directory />"
+	fwrite $FILEPATH "		Options FollowSymLinks"
+	fwrite $FILEPATH "		AllowOverride None"
+	fwrite $FILEPATH "	</Directory>"
+	fwrite $FILEPATH "	<Directory />"
+	fwrite $FILEPATH "		DirectoryIndex index.html index.php"
+	fwrite $FILEPATH "		Options Indexes FollowSymLinks MultiViews"
+	fwrite $FILEPATH "		AllowOverride None"
+	fwrite $FILEPATH "		Order allow,deny"
+	fwrite $FILEPATH "		allow from all"
+	fwrite $FILEPATH "	</Directory>"
+	fwrite $FILEPATH "</VirtualHost>"
+	chmod www-data $FILEPATH -R
+	[ "$(stat $FILEPATH -c %u)" == "$(id -u www-data)" ] && { echo "0"; exit 0 }
+	echo "$ERROR_FAILED_TO_SET_FILEPATH_PERMISSION"
+	exit $ERROR_FAILED_TO_SET_FILEPATH_PERMISSION
+fi
+ 

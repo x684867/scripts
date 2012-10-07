@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+#	verifyDomainName.sh
+#
+#	(c) 2011 Sam Caldwell.  All Rights Reserved.
+#	This script is 
+#
+#	This script validates a given domain name to 
+#	ensure it complies with expected formatting
+#	and that its DNS address resolves to the 
+#	current host's WAN IP.  If the A record does
+#	not resolve properly, then the script fails.
+#
+TLD_LIST="AERO ARPA ASIA BIZ CAT COM COOP EDU GOV INFO INT JOBS MIL MOBI MUSEUM NAME NET ORG PRO TEL TRAVEL US CO TV XXX XXXX AC AB BA CA CN DK EN FR GR GK GA ID IA IN FI EC EG ER EE EU AZ FO FM IL IT JP KZ AR LA LC LI LV LY MA"
+[ -z "$1" ] && {
+	echo "1"
+	exit "1"
+}
+[ "$1" == "--help" ] || [ "$1" == "-h" ] && {
+	echo " "
+	echo "This script validates a given domain name and "
+	echo "returns a numeric result to stdout indicating"
+	echo "the validity of the input."
+	echo " "
+	echo "Given a domain name (e.g. samcaldwell.net) this script"
+	echo "will first validate the format of the string to ensure it"
+	echo "meets the expected formatting.  Then the script queries"
+	echo "the provided DNS server to ensure the A record for the"
+	echo "domain exists and references the provided public interface's"
+	echo "IP ADDRESS."
+	echo " "
+	echo "USAGE:"
+	echo "		$0 DOMAIN_NAME PUBLIC_INTERFACE DNS_SERVER"
+	echo " "
+	echo "RESULTS:"
+	echo " "
+	echo "		0	...Input domain name address is valid."
+	echo "		1	...Error!  Missing input."
+	echo "		2	...Error!  Invalid Domain Name"
+	echo "		3	...Error!  Invalid Public Interface"
+	echo "		4	...Error!  Domain name does not resolve to given public IP address."
+	echo "		5	...Error!  Public Interface IP address could not be verified."
+	echo " "
+	exit 1
+}
+if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
+	echo "1"
+	exit 1
+fi
+DOMAIN_NAME="$1"
+PUBLIC_INTERFACE="$2"
+DNS_SERVER="$3"
+RETURN_CODE="2"
+if [[ $DOMAIN_NAME =~ (([A-Za-z0-9]+)\.)+ ]]; then
+	TLD=$(echo $DOMAIN_NAME | tail -c 7 | tr -s '.' ' ' | gawk '{print $2}' | tr -s '[a-z]' '[A-Z]')
+	for i in $TLD_LIST; do
+		if [ "$i" == "$TLD" ]; then 
+			RETURN_CODE="1"
+		fi
+	done
+fi	
+[ "$RETURN_CODE" != "1" ] && { echo $RETURN_CODE; exit $RETURN_CODE; }
+RETURN_CODE="0"
+for i in $(ip link show | grep mtu | gawk '{print $2}' | grep -v lo | tr -d ':' | tr -s '\n' ' '); do
+	[ "$i" == "$PUBLIC_INTERFACE" ] && RETURN_CODE="1"
+done
+[ "$RETURN_CODE" != "1" ] && { echo "3"; exit 3; }
+IPADDR=$(ifconfig wlan0 | grep inet\ addr | gawk '{print $2}' | tr -s ':' ' ' | gawk '{print $2}')
+if [ "$(verifyIPaddress.sh "$IPADDR")" == "0" ]; then
+	if [ "$(host $DOMAIN_NAME $DNS_SERVER -t A | tail -n+6 | head -n1 | gawk '{print $4}')" != 	"$IPADDR" ]; then
+		echo 4
+		exit 4
+	else
+		echo 0
+		exit 0
+	fi	
+else
+	echo 5
+	exit 5
+fi
+ 

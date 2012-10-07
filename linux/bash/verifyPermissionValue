@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# verifyPermissionValue.sh
+#
+#	(c) 2011 Sam Caldwell.  All Rights Reserved.
+#
+#	This script will verify that a given input is a
+#	valid octal permission value (e.g. 777)
+#
+#	INPUTS:
+#			$1 ...octal permission
+#	
+#	OUTPUT:
+#			"0" ...permission is valid
+#			"1" ...permission is NOT valid
+#			"2" ...error state exist
+#
+[ -z "$1" ] && { echo "2"; exit 2; }
+PERMISSION="$1";
+[ "$(echo $PERMISSION | wc -c)" == "4" ] && \
+[ "$(echo $PERMISSION | tr -c 0-7 ' ' | tr -d ' ' | wc -c)" == "3" ] && {
+	echo "0"
+	exit 0
+}
+echo "1"
+exit 1
